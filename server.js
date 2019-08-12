@@ -1,10 +1,10 @@
-require('dotenv').config()
+require('dotenv').config();
 const { URLSearchParams } = require('url');
 const fetch = require('node-fetch');
 const polka = require('polka');
 const cors = require('cors');
 
-const {PORT = 9999, GITHUB_TOKEN} = process.env;
+const { PORT = 9999, GITHUB_TOKEN } = process.env;
 
 function error(errorData) {
   console.error(`Error [${errorData.id}]:`, errorData.message);
@@ -19,11 +19,11 @@ function filterRecentPR(pr) {
   const isDifferentYear = dPR.getUTCFullYear() !== dMachine.getUTCFullYear();
   const isOlderThanOneMonth = dMachine.getUTCMonth() - dPR.getUTCMonth() > 1;
 
-  if(isDifferentYear) {
+  if (isDifferentYear) {
     return false;
   }
 
-  if(isOlderThanOneMonth) {
+  if (isOlderThanOneMonth) {
     return false;
   }
 
@@ -48,7 +48,7 @@ function mapPRData(pr) {
     number: pr.number,
     repo,
     secPRAge,
-  }
+  };
 
   return data;
 }
@@ -63,7 +63,7 @@ async function getTeamMembers(team) {
   const apiData = await apiRes.json();
   const teamId = apiData.id;
 
-  if(!teamId) {
+  if (!teamId) {
     error({
       message: 'Invalid Team Id',
       id: 'team-slug:invalid',
@@ -93,13 +93,13 @@ async function getReviewerData(reviewer) {
       Authorization: `token ${GITHUB_TOKEN}`,
     },
   });
-  return new Promise((resolve) => {
-    apiRes.json().then((apiData) => {
+  return new Promise(resolve => {
+    apiRes.json().then(apiData => {
       resolve({
         reviewer,
         data: cleanseData(apiData.items),
-      })
-    })
+      });
+    });
   });
 }
 
@@ -111,10 +111,10 @@ function cleanseData(prList) {
 polka()
   .use(cors())
   .get('/api/reviewers', async (req, res) => {
-    const {team} = req.query;
+    const { team = '' } = req.query;
 
     try {
-      if(team.length === 0) {
+      if (team.length === 0) {
         error({
           message: 'Please provide a team slug',
           id: 'team-slug:absent',
@@ -134,7 +134,33 @@ polka()
       });
 
       res.end(JSON.stringify({ reviewersList, assignedPR }));
-    } catch(error) {
+    } catch (error) {
+      res.statusCode = 403;
+      res.end(error.message);
+    }
+  })
+  .get('/api/pendingPRCount', async (req, res) => {
+    const { reviewers = '' } = req.query;
+    try {
+      if (reviewers.length === 0) {
+        error({
+          message: 'Please provide a comma separated list of reviewers',
+          id: 'reviewers-list:absent',
+        });
+      }
+
+      const reviewersList = reviewers.split(',');
+      console.log('reviewers', reviewersList);
+      const promiseList = reviewersList.map(reviewer => getReviewerData(reviewer));
+      const data = await Promise.all(promiseList);
+
+      const assignedPR = {};
+      data.forEach(d => {
+        assignedPR[d.reviewer] = d.data.length;
+      });
+
+      res.end(JSON.stringify({ assignedPR }));
+    } catch (error) {
       res.statusCode = 403;
       res.end(error.message);
     }
