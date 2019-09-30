@@ -4,7 +4,7 @@ const fetch = require('node-fetch');
 const polka = require('polka');
 const cors = require('cors');
 
-const { PORT = 9999, GITHUB_TOKEN } = process.env;
+const { PORT = 9999, GITHUB_TOKEN, GITHUB_ORG } = process.env;
 
 function error(errorData) {
   console.error(`Error [${errorData.id}]:`, errorData.message);
@@ -54,7 +54,7 @@ function mapPRData(pr) {
 }
 
 async function getTeamMembers(team) {
-  const url = `https://api.github.com/orgs/interviewstreet/teams/${team}`;
+  const url = `https://api.github.com/orgs/${GITHUB_ORG}/teams/${team}`;
   const apiRes = await fetch(url, {
     headers: {
       Authorization: `token ${GITHUB_TOKEN}`,
@@ -80,7 +80,7 @@ async function getTeamMembers(team) {
 }
 
 async function getReviewerData(reviewer) {
-  const searchQuery = `q=is:open+is:pr+org:interviewstreet+review-requested:${reviewer}`;
+  const searchQuery = `q=is:open+is:pr+org:${GITHUB_ORG}+review-requested:${reviewer}`;
   const params = new URLSearchParams({
     sort: 'created',
     order: 'desc',
