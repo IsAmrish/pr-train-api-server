@@ -1,8 +1,8 @@
-require('dotenv').config();
-const { URLSearchParams } = require('url');
-const fetch = require('node-fetch');
-const polka = require('polka');
-const cors = require('cors');
+require("dotenv").config();
+const { URLSearchParams } = require("url");
+const fetch = require("node-fetch");
+const polka = require("polka");
+const cors = require("cors");
 
 const { PORT = 9999, GITHUB_TOKEN, GITHUB_ORG } = process.env;
 
@@ -35,7 +35,7 @@ function mapPRData(pr) {
   const dMachine = new Date();
 
   const repoUrl = pr.repository_url;
-  const lastSlashIndex = repoUrl.lastIndexOf('/');
+  const lastSlashIndex = repoUrl.lastIndexOf("/");
   const repo = repoUrl.substring(lastSlashIndex + 1);
 
   const secPRAge = (dMachine.getTime() - dPR.getTime()) / 1000;
@@ -47,7 +47,7 @@ function mapPRData(pr) {
     link: pr.html_url,
     number: pr.number,
     repo,
-    secPRAge,
+    secPRAge
   };
 
   return data;
@@ -57,16 +57,16 @@ async function getTeamMembers(team) {
   const url = `https://api.github.com/orgs/${GITHUB_ORG}/teams/${team}`;
   const apiRes = await fetch(url, {
     headers: {
-      Authorization: `token ${GITHUB_TOKEN}`,
-    },
+      Authorization: `token ${GITHUB_TOKEN}`
+    }
   });
   const apiData = await apiRes.json();
   const teamId = apiData.id;
 
   if (!teamId) {
     error({
-      message: 'Invalid Team Id',
-      id: 'team-slug:invalid',
+      message: "Invalid Team Id",
+      id: "team-slug:invalid"
     });
   }
 
@@ -74,30 +74,39 @@ async function getTeamMembers(team) {
 
   return fetch(membersUrl, {
     headers: {
-      Authorization: `token ${GITHUB_TOKEN}`,
-    },
+      Authorization: `token ${GITHUB_TOKEN}`
+    }
+  });
+}
+
+async function getTeams() {
+  const url = `https://api.github.com/orgs/${GITHUB_ORG}/teams`;
+  return fetch(url, {
+    headers: {
+      Authorization: `token ${GITHUB_TOKEN}`
+    }
   });
 }
 
 async function getReviewerData(reviewer) {
   const searchQuery = `q=is:open+is:pr+org:${GITHUB_ORG}+review-requested:${reviewer}`;
   const params = new URLSearchParams({
-    sort: 'created',
-    order: 'desc',
+    sort: "created",
+    order: "desc"
   });
   const otherQueries = params.toString();
   const url = `https://api.github.com/search/issues?${searchQuery}&${otherQueries}`;
 
   const apiRes = await fetch(url, {
     headers: {
-      Authorization: `token ${GITHUB_TOKEN}`,
-    },
+      Authorization: `token ${GITHUB_TOKEN}`
+    }
   });
   return new Promise(resolve => {
     apiRes.json().then(apiData => {
       resolve({
         reviewer,
-        data: cleanseData(apiData.items),
+        data: cleanseData(apiData.items)
       });
     });
   });
@@ -110,48 +119,52 @@ function cleanseData(prList) {
 
 polka()
   .use(cors())
-  .get('/api/reviewers', async (req, res) => {
-    const { team = '' } = req.query;
+  .get("/api/reviewers", async (req, res) => {
+    const { team = "" } = req.query;
 
     try {
       if (team.length === 0) {
-        error({
-          message: 'Please provide a team slug',
-          id: 'team-slug:absent',
+        const teamsRes = await getTeams();
+        const teamsData = await teamsRes.json();
+        const teamsList = teamsData.map(team => team.name);
+        res.end(JSON.stringify({ teamsList }));
+      } else {
+        const reviewerRes = await getTeamMembers(team);
+        const reviewerData = await reviewerRes.json();
+        const reviewersList = reviewerData.map(reviewer => reviewer.login);
+
+        const promiseList = reviewersList.map(reviewer =>
+          getReviewerData(reviewer)
+        );
+        const data = await Promise.all(promiseList);
+
+        const assignedPR = {};
+        data.forEach(d => {
+          assignedPR[d.reviewer] = d.data;
         });
+
+        res.end(JSON.stringify({ reviewersList, assignedPR }));
       }
-
-      const reviewerRes = await getTeamMembers(team);
-      const reviewerData = await reviewerRes.json();
-      const reviewersList = reviewerData.map(reviewer => reviewer.login);
-
-      const promiseList = reviewersList.map(reviewer => getReviewerData(reviewer));
-      const data = await Promise.all(promiseList);
-
-      const assignedPR = {};
-      data.forEach(d => {
-        assignedPR[d.reviewer] = d.data;
-      });
-
-      res.end(JSON.stringify({ reviewersList, assignedPR }));
     } catch (error) {
       res.statusCode = 403;
       res.end(error.message);
     }
   })
-  .get('/api/pendingPRCount', async (req, res) => {
-    const { reviewers = '' } = req.query;
+  .get("/api/pendingPRCount", async (req, res) => {
+    const { reviewers = "" } = req.query;
     try {
       if (reviewers.length === 0) {
         error({
-          message: 'Please provide a comma separated list of reviewers',
-          id: 'reviewers-list:absent',
+          message: "Please provide a comma separated list of reviewers",
+          id: "reviewers-list:absent"
         });
       }
 
-      const reviewersList = reviewers.split(',');
-      console.log('reviewers', reviewersList);
-      const promiseList = reviewersList.map(reviewer => getReviewerData(reviewer));
+      const reviewersList = reviewers.split(",");
+      console.log("reviewers", reviewersList);
+      const promiseList = reviewersList.map(reviewer =>
+        getReviewerData(reviewer)
+      );
       const data = await Promise.all(promiseList);
 
       const assignedPR = {};
