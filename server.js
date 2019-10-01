@@ -119,24 +119,32 @@ function cleanseData(prList) {
 
 polka()
   .use(cors())
+  .get('/api/teams', async (req, res) => {
+    try {
+      const teamsRes = await getTeams();
+      const teamsData = await teamsRes.json();
+      const teamsList = teamsData.map(team => team.name);
+      res.end(JSON.stringify({ teamsList }));
+    } catch (error) {
+      res.statusCode = 403;
+      res.end(error.message);
+    }
+  })
   .get('/api/reviewers', async (req, res) => {
     const { team = '' } = req.query;
 
     try {
       if (team.length === 0) {
-        const teamsRes = await getTeams();
-        const teamsData = await teamsRes.json();
-        const teamsList = teamsData.map(team => team.name);
-        res.end(JSON.stringify({ teamsList }));
-        return;
+        error({
+          message: 'Please provide a team slug',
+          id: 'team-slug:absent',
+        });
       }
       const reviewerRes = await getTeamMembers(team);
       const reviewerData = await reviewerRes.json();
       const reviewersList = reviewerData.map(reviewer => reviewer.login);
 
-      const promiseList = reviewersList.map(reviewer =>
-        getReviewerData(reviewer)
-      );
+      const promiseList = reviewersList.map(reviewer => getReviewerData(reviewer));
       const data = await Promise.all(promiseList);
 
       const assignedPR = {};
@@ -162,9 +170,7 @@ polka()
 
       const reviewersList = reviewers.split(',');
       console.log('reviewers', reviewersList);
-      const promiseList = reviewersList.map(reviewer =>
-        getReviewerData(reviewer)
-      );
+      const promiseList = reviewersList.map(reviewer => getReviewerData(reviewer));
       const data = await Promise.all(promiseList);
 
       const assignedPR = {};
