@@ -123,7 +123,7 @@ polka()
     try {
       const teamsRes = await getTeams();
       const teamsData = await teamsRes.json();
-      const teamsList = teamsData.map(team => team.name);
+      const teamsList = teamsData.map(team => ({ name: team.name, slug: team.slug }));
       res.end(JSON.stringify({ teamsList }));
     } catch (error) {
       res.statusCode = 403;
